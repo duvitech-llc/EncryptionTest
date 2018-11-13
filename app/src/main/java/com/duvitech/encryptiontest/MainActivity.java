@@ -43,6 +43,11 @@ public class MainActivity extends AppCompatActivity {
     private static RSAPrivateKey priv;
     private static RSAPublicKey pub;
 
+    private static String pubKeyString = "MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDxj8SY2s9wAqaxoJ8wgZ6/+Vnd" +
+        "SxxkunHyYe6eIH4g+S+cTZVDtifVeJiLBFrwXa4npRDoarhttLTMd8f4vRV5MpNO" +
+        "Tp2kMYQZAqyXphLvLPWt9a3+2NG0qSlq/SS8n9tFVFBJ9QHDrsppR5JsQFAoiZPC" +
+        "j2Q4eoBkQ763y3S57wIDAQAB";
+
     private static String prvKeyString = "MIICXAIBAAKBgQDxj8SY2s9wAqaxoJ8wgZ6/+VndSxxkunHyYe6eIH4g+S+cTZVD" +
             "tifVeJiLBFrwXa4npRDoarhttLTMd8f4vRV5MpNOTp2kMYQZAqyXphLvLPWt9a3+" +
             "2NG0qSlq/SS8n9tFVFBJ9QHDrsppR5JsQFAoiZPCj2Q4eoBkQ763y3S57wIDAQAB" +
@@ -58,11 +63,11 @@ public class MainActivity extends AppCompatActivity {
             "dwr2BkHCCamgAnE9F7kDyMSMMk9PdZbo1hdRmNHBsH8=";
 
 
-    public byte[] RSAEncrypt(final String plain) throws NoSuchAlgorithmException, NoSuchPaddingException,
+    public byte[] RSAEncrypt(final String plain, PublicKey key) throws NoSuchAlgorithmException, NoSuchPaddingException,
             InvalidKeyException, IllegalBlockSizeException, BadPaddingException {
 
-        Cipher cipher = Cipher.getInstance("RSA");
-        cipher.init(Cipher.ENCRYPT_MODE, pub);
+        Cipher cipher = Cipher.getInstance("RSA/NONE/OAEPPadding");
+        cipher.init(Cipher.ENCRYPT_MODE, key);
         byte[] encryptedBytes = cipher.doFinal(plain.getBytes());
         Log.d(TAG, "Encrypted: " + Base64.encodeToString(encryptedBytes, Base64.DEFAULT));
         return encryptedBytes;
@@ -82,9 +87,11 @@ public class MainActivity extends AppCompatActivity {
 
     private static KeyPair generateRSAKeyPair() throws NoSuchAlgorithmException, NoSuchProviderException {
         KeyPairGenerator generator = KeyPairGenerator.getInstance("RSA", "BC");
+
         generator.initialize(KEY_SIZE);
 
         KeyPair keyPair = generator.generateKeyPair();
+
         Log.d(TAG,"RSA key pair generated.");
         return keyPair;
     }
@@ -131,7 +138,23 @@ public class MainActivity extends AppCompatActivity {
             priv = (RSAPrivateKey) keyPair.getPrivate();
             pub = (RSAPublicKey) keyPair.getPublic();
 
+/*
+String publicKeyB64 = "MIGHAoGBAOX+TFdFVIKYyCVxWlnbGYbmgkkmHmEv2qStZzAFt6NVqKPLK989Ow0RcqcDTZaZBfO5"
+        + "5JSVHNIKoqULELruACfqtGoATfgwBp4Owfww8M891gKNSlI/M0yzDQHns5CKwPE01jD6qGZ8/2IZ"
+        + "OjLJNH6qC9At8iMCbPe9GeXIPFWRAgER";
+// ok, you may need to use the Base64 decoder of bouncy or Android instead
+byte[] decoded = Base64.getDecoder().decode(publicKeyB64);
+org.bouncycastle.asn1.pkcs.RSAPublicKey pkcs1PublicKey = org.bouncycastle.asn1.pkcs.RSAPublicKey.getInstance(decoded);
+BigInteger modulus = pkcs1PublicKey.getModulus();
+BigInteger publicExponent = pkcs1PublicKey.getPublicExponent();
+RSAPublicKeySpec keySpec = new RSAPublicKeySpec(modulus, publicExponent);
+KeyFactory kf = KeyFactory.getInstance("RSA");
+PublicKey generatedPublic = kf.generatePublic(keySpec);
+System.out.printf("Modulus: %X%n", modulus);
+System.out.printf("Public exponent: %d ... 17? Why?%n", publicExponent); // 17? OK.
+System.out.printf("See, Java class result: %s, is RSAPublicKey: %b%n", generatedPublic.getClass().getName(), generatedPublic instanceof RSAPublicKey);
 
+ */
             byte[] decoded = Base64.decode(prvKeyString, Base64.DEFAULT);
             PKCS8EncodedKeySpec spec =
                     new PKCS8EncodedKeySpec(decoded);
@@ -139,10 +162,16 @@ public class MainActivity extends AppCompatActivity {
             PrivateKey generatePrivate = kf.generatePrivate(spec);
             RSADecrypt(Base64.decode("BRl2nfZysbi4aLl+4Ei1eVkWWyfN64gQWddeEU3pUldjHG1oNBh+XE2oHwfhBIYKN+DlF/e92pxpK30CPWkcGP7IYQe2Ggr8cNKbglpacWR+M4PX+8E+W8SFxIDkPLjhjmjAZpnxDD7KQp3GxtDbowo1Q97LsdyMnaajqUTUV+E=" , Base64.DEFAULT), generatePrivate);
 
+            byte[] pubDecoded = Base64.decode(pubKeyString, Base64.DEFAULT);
+            X509EncodedKeySpec specPub =
+                    new X509EncodedKeySpec (pubDecoded);
+            PublicKey generatePublic = kf.generatePublic(specPub);
+            RSAEncrypt("Hello CRUEL world!", generatePublic);
+
             //writePemFile(priv, "Private KEYFILE", new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "private.pem").getPath());
 
             //writePemToLog(pub,"Public Key");
-            //writePrivatePemToLog(priv,"Private Key");
+            writePrivatePemToLog(priv,"Private Key");
 
             Log.d(TAG, "PublicKey: \n" + Base64.encodeToString(pub.getEncoded(), Base64.DEFAULT));
             Log.d(TAG, "PrivateKey: \n" + Base64.encodeToString(priv.getEncoded(), Base64.DEFAULT));
@@ -156,7 +185,7 @@ public class MainActivity extends AppCompatActivity {
             @Override
             public void onClick(View v) {
                 try {
-                    byte[] arr = RSAEncrypt("Hello world!");
+                    // byte[] arr = RSAEncrypt("Hello CRUEL world!");
                     // String s = RSADecrypt(arr);
                 }catch(Exception ex){
                     Log.e(TAG, ex.getMessage());
